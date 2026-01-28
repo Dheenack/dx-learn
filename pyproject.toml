@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dx-learn"
+version = "0.0.1"
+description = "DX-learn: Explainability-aware AutoML with SHAP and TensorBoard-style dashboard"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+  { name = "Dheena Krishna S" }
+]
+requires-python = ">=3.10"
+
+dependencies = [
+  "numpy",
+  "pandas",
+  "scikit-learn",
+  "joblib",
+  "shap",
+  "autosklearn2",
+]
+
+[project.optional-dependencies]
+api = ["fastapi", "uvicorn"]
+
+[project.scripts]
+dxlearn = "dxlearn.cli:main"
