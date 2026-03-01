@@ -1,0 +1,2 @@
+# Static assets for dashboard (e.g. future custom JS/CSS)
+# Currently dashboard uses inline HTML/JS in api.py

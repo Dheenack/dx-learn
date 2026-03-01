@@ -1,0 +1,122 @@
+Metadata-Version: 2.4
+Name: dxlearn
+Version: 0.1.0
+Summary: Genetic Algorithm Driven AutoML Framework for sklearn-compatible classification pipelines
+Author: dxlearn
+License: MIT
+Project-URL: Repository, https://github.com/dxlearn/dxlearn
+Keywords: automl,genetic-algorithm,scikit-learn,classification,optimization
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.24
+Requires-Dist: scikit-learn>=1.3
+Requires-Dist: joblib>=1.3
+Provides-Extra: dashboard
+Requires-Dist: fastapi>=0.104; extra == "dashboard"
+Requires-Dist: uvicorn[standard]>=0.24; extra == "dashboard"
+Requires-Dist: pydantic>=2.0; extra == "dashboard"
+
+# dxlearn — Genetic Algorithm Driven AutoML Framework
+
+**dxlearn** is a production-grade, research-ready AutoML Python package that discovers optimal classification pipelines using a **grammar-constrained Genetic Algorithm (GA)** built strictly on top of `scikit-learn`.
+
+## Features
+
+- **Grammar-constrained search**: Pipelines follow `<OptionalPreprocessor> <Scaler> <Classifier>`.
+- **Multi-objective fitness**: Accuracy, fit time, predict time, and complexity (scalarized for selection).
+- **sklearn-compatible API**: `fit`, `predict`, `predict_proba`, `score`, `get_params`, `set_params`.
+- **Deterministic & reproducible**: Optional seeded RNG and fitness caching.
+- **Extensible**: Base abstractions for regression, NSGA-II, and distributed GA (future).
+
+## Requirements
+
+- Python 3.11+
+- numpy, scikit-learn, joblib
+
+## Installation
+
+```bash
+pip install -e .
+# With dashboard (FastAPI + uvicorn):
+pip install -e ".[dashboard]"
+```
+
+## Quick Start
+
+```python
+from dxlearn import DXClassifier
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+
+X, y = load_iris(return_X_y=True)
+X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
+
+model = DXClassifier(
+    population_size=30,
+    generations=20,
+    cv=5,
+    alpha=1.0,
+    beta=0.2,
+    gamma=0.01,
+    max_runtime=600,
+    verbose=2,
+    n_jobs=-1,
+    deterministic=True,
+    random_state=42,
+)
+
+model.fit(X_train, y_train)
+preds = model.predict(X_test)
+print(model.score(X_test, y_test))
+print(model.best_pipeline_)
+print(model.best_score_)
+
+# Optional: launch analytical dashboard
+model.dashboard()  # requires pip install dxlearn[dashboard]
+```
+
+## Pipeline Grammar (v1)
+
+- **OptionalPreprocessor**: `None` | `PCA` | `SelectKBest` | `PolynomialFeatures` | `VarianceThreshold`
+- **Scaler**: `StandardScaler` | `MinMaxScaler` | `RobustScaler`
+- **Classifier**: `LogisticRegression` | `RandomForestClassifier` | `GradientBoostingClassifier` | `SVC` | `KNeighborsClassifier` | `DecisionTreeClassifier`
+
+## Fitness
+
+Multi-objective vector: `(accuracy, fit_time, predict_time, complexity)`.  
+Scalarized for selection: `α·accuracy − β·fit_time − γ·complexity − δ·predict_time` (default weights: α=1, β=0.2, γ=0.01).
+
+## Dashboard
+
+With `pip install dxlearn[dashboard]`, calling `model.dashboard()` starts a FastAPI server at `http://127.0.0.1:8000` with:
+
+- Generation evolution curves (best fitness, best accuracy)
+- Accuracy vs time scatter
+- Mean fitness over generations
+- Best metrics summary
+
+## Package Layout
+
+```
+dxlearn/
+├── base/           # BaseSearch, EvolutionarySearch, BaseDXEstimator
+├── encoding/       # Grammar, tree, node (pipeline representation)
+├── operators/      # Selection, crossover, mutation
+├── search_space/   # Registry (scalers, preprocessors, classifiers)
+├── evaluation/     # Evaluator, Objectives, Scalarizer
+├── engine/         # GeneticSearch
+├── dashboard/      # FastAPI dashboard (optional)
+├── dxclassifier.py # Public API
+└── config.py       # Defaults
+```
+
+## License
+
+MIT.
