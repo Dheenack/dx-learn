@@ -163,7 +163,7 @@ class DXClassifier:
         }
 
     def set_params(self, **params: Any) -> DXClassifier:
-        """Set parameters (sklearn API). Rebuilds internal search."""
+        """Set parameters (sklearn API). Rebuilds internal search and clears fitted state."""
         for k, v in params.items():
             if hasattr(self, k):
                 setattr(self, k, v)
@@ -187,6 +187,9 @@ class DXClassifier:
             deterministic=self.deterministic,
             **self._kwargs,
         )
+        self._estimator = None
+        self.best_pipeline_ = None
+        self.best_score_ = None
         return self
 
     def dashboard(self, host: str = "127.0.0.1", port: int = 8000) -> None:
@@ -195,6 +198,8 @@ class DXClassifier:
 
         Requires: pip install dxlearn[dashboard]
         """
+        if self._estimator is None or self.best_pipeline_ is None:
+            raise RuntimeError("Call fit(X, y) before dashboard() to view evolution history.")
         try:
             from dxlearn.dashboard.api import run_dashboard
         except ImportError as e:

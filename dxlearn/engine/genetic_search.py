@@ -124,6 +124,11 @@ class GeneticSearch(EvolutionarySearch):
         self._history: List[Dict[str, Any]] = []
         self._best_objectives: Optional[Objectives] = None
 
+        if population_size < 2:
+            raise ValueError("population_size must be >= 2")
+        if elitism_count >= population_size:
+            raise ValueError("elitism_count must be strictly less than population_size")
+
     def _create_individual(self) -> PipelineNode:
         return _create_random_individual(self._get_rng())
 

@@ -46,6 +46,9 @@ include = ["dxlearn*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+filterwarnings = [
+    "ignore:k=.* is greater than n_features=.*:UserWarning:sklearn.feature_selection._univariate_selection",
+]
 
 [tool.mypy]
 python_version = "3.11"

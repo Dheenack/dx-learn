@@ -79,7 +79,7 @@ class ComponentRegistry:
                 "svd_solver": ("categorical", ["auto", "full"], None),
             },
             "SelectKBest": {
-                "k": ("int", 5, 50),
+                "k": ("int", 1, 20),
             },
             "PolynomialFeatures": {
                 "degree": ("int", 2, 3),
@@ -110,6 +110,7 @@ class ComponentRegistry:
                 "C": ("log", 0.01, 100.0),
                 "kernel": ("categorical", ["rbf", "linear", "poly"], None),
                 "gamma": ("categorical", ["scale", "auto"], None),
+                "probability": ("categorical", [True], None),
             },
             "KNeighborsClassifier": {
                 "n_neighbors": ("int", 1, 30),
@@ -144,10 +145,12 @@ class ComponentRegistry:
 
     def build_classifier(self, key: str, params: Optional[Dict[str, Any]] = None) -> BaseEstimator:
         """Build a classifier instance by key."""
-        params = params or {}
+        params = dict(params or {})
         cls = self._classifiers.get(key)
         if cls is None:
             raise ValueError(f"Unknown classifier: {key}")
+        if key == "SVC":
+            params.setdefault("probability", True)
         import inspect
         sig = inspect.signature(cls.__init__)
         valid = {k: v for k, v in params.items() if k in sig.parameters}
