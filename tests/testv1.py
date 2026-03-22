@@ -8,6 +8,5 @@ def test_dxclassifier_iris():
 
     model = DXClassifier(population_size=10, generations=5, cv=3, verbose=0, n_jobs=1, random_state=42)
     model.fit(X_train, y_train)
-
     assert model.best_score_ is not None
     assert model.score(X_test, y_test) > 0.9

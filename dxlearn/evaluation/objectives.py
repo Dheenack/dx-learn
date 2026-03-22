@@ -15,7 +15,8 @@ class Objectives:
     Container for multi-objective evaluation metrics.
 
     Attributes:
-        accuracy: Mean cross-validation score (e.g. accuracy).
+        accuracy: Mean cross-validation score (e.g. accuracy), or ``-1.0`` if
+            the pipeline failed validation or evaluation.
         fit_time: Mean training time across folds (seconds).
         predict_time: Mean inference time (seconds).
         complexity: Structural complexity score (e.g. node count).

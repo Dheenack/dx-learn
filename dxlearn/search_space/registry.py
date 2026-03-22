@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 
+import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectKBest, VarianceThreshold, f_classif
@@ -79,7 +80,7 @@ class ComponentRegistry:
                 "svd_solver": ("categorical", ["auto", "full"], None),
             },
             "SelectKBest": {
-                "k": ("int", 5, 50),
+                "k": ("int", 1, 20),
             },
             "PolynomialFeatures": {
                 "degree": ("int", 2, 3),
@@ -94,7 +95,8 @@ class ComponentRegistry:
             "LogisticRegression": {
                 "C": ("log", 0.01, 100.0),
                 "max_iter": ("int", 100, 2000),
-                "solver": ("categorical", ["lbfgs", "saga"], None),
+                # lbfgs only: saga touches global RNG and is sensitive to max_iter / thread order.
+                "solver": ("categorical", ["lbfgs"], None),
             },
             "RandomForestClassifier": {
                 "n_estimators": ("int", 10, 200),
@@ -110,6 +112,7 @@ class ComponentRegistry:
                 "C": ("log", 0.01, 100.0),
                 "kernel": ("categorical", ["rbf", "linear", "poly"], None),
                 "gamma": ("categorical", ["scale", "auto"], None),
+                "probability": ("categorical", [True], None),
             },
             "KNeighborsClassifier": {
                 "n_neighbors": ("int", 1, 30),
@@ -121,16 +124,36 @@ class ComponentRegistry:
             },
         }
 
-    def build_preprocessor(self, key: str, params: Optional[Dict[str, Any]] = None) -> BaseEstimator:
-        """Build a preprocessor instance by key with given params."""
+    def build_preprocessor(
+        self,
+        key: str,
+        params: Optional[Dict[str, Any]] = None,
+        n_features: Optional[int] = None,
+        random_state: Optional[int] = None,
+    ) -> BaseEstimator:
+        """Build a preprocessor instance by key with given params.
+
+        Args:
+            key: Preprocessor registry key.
+            params: Constructor keyword arguments.
+            n_features: If set, ``SelectKBest`` ``k`` is clamped to
+                ``min(k, n_features)`` to avoid sklearn warnings and redundant
+                behavior when ``k`` exceeds the number of input features.
+        """
         params = dict(params or {})
         cls = self._preprocessors.get(key)
         if cls is None:
             raise ValueError(f"Unknown preprocessor: {key}")
         if key == "SelectKBest":
             params.setdefault("score_func", f_classif)
+            if n_features is not None and n_features > 0 and "k" in params:
+                k_raw = params["k"]
+                if isinstance(k_raw, (int, np.integer)):
+                    params["k"] = min(int(k_raw), int(n_features))
         import inspect
         sig = inspect.signature(cls.__init__)
+        if random_state is not None and "random_state" in sig.parameters:
+            params.setdefault("random_state", random_state)
         valid = {k: v for k, v in params.items() if k in sig.parameters}
         return cls(**valid)
 
@@ -142,14 +165,23 @@ class ComponentRegistry:
             raise ValueError(f"Unknown scaler: {key}")
         return cls(**params)
 
-    def build_classifier(self, key: str, params: Optional[Dict[str, Any]] = None) -> BaseEstimator:
+    def build_classifier(
+        self,
+        key: str,
+        params: Optional[Dict[str, Any]] = None,
+        random_state: Optional[int] = None,
+    ) -> BaseEstimator:
         """Build a classifier instance by key."""
-        params = params or {}
+        params = dict(params or {})
         cls = self._classifiers.get(key)
         if cls is None:
             raise ValueError(f"Unknown classifier: {key}")
+        if key == "SVC":
+            params.setdefault("probability", True)
         import inspect
         sig = inspect.signature(cls.__init__)
+        if random_state is not None and "random_state" in sig.parameters:
+            params.setdefault("random_state", random_state)
         valid = {k: v for k, v in params.items() if k in sig.parameters}
         return cls(**valid)
 
