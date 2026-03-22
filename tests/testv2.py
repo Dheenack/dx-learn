@@ -18,4 +18,5 @@ preds=model.predict(xtest)
 print(f"model best score={model.best_score_}")
 print(model.score(xtest, ytest))
 print(model.best_pipeline_)
+model.dashboard()
 # Optional: model.dashboard()  # starts blocking server; run manually if needed
