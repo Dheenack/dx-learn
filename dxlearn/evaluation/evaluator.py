@@ -135,7 +135,10 @@ class Evaluator:
         def _body() -> Tuple[float, Objectives]:
             n_features = int(np.asarray(X).shape[1])
             pipeline = tree_to_pipeline(
-                individual, registry=registry, n_features=n_features
+                individual,
+                registry=registry,
+                n_features=n_features,
+                random_state=self.random_state,
             )
             if not validate_pipeline(pipeline, X, y):
                 logger.warning(
@@ -169,9 +172,11 @@ class Evaluator:
                 return _penalized()
             fit_times = result["fit_time"]
             score_times = result["score_time"]
-            accuracy = float(np.nanmean(test_scores))
-            fit_time = float(np.mean(fit_times))
-            predict_time = float(np.mean(score_times))
+            accuracy = float(np.round(np.nanmean(test_scores), 8))
+            # Quantize timings aggressively: tiny wall-clock differences change
+            # population min-max normalization and break deterministic GA selection.
+            fit_time = float(np.round(np.mean(fit_times), 2))
+            predict_time = float(np.round(np.mean(score_times), 2))
             objectives = Objectives(
                 accuracy=accuracy,
                 fit_time=fit_time,
@@ -224,7 +229,11 @@ class Evaluator:
         """
         from joblib import Parallel, delayed
 
-        results = Parallel(n_jobs=n_jobs)(
+        # Sequential backend avoids subtle ordering/thread issues when n_jobs==1.
+        parallel_kw: Dict[str, Any] = {"n_jobs": n_jobs}
+        if n_jobs == 1:
+            parallel_kw["backend"] = "sequential"
+        results = Parallel(**parallel_kw)(
             delayed(self.evaluate)(ind, X, y, registry) for ind in population
         )
         fitnesses = [r[0] for r in results]

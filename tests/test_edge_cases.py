@@ -1,6 +1,11 @@
 """
 Edge cases: small population, elitism, empty/minimal data, invalid config.
 """
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 import numpy as np
 from sklearn.datasets import load_iris, make_classification
@@ -42,33 +47,34 @@ def test_elitism_not_exceeds_population():
 
 
 def test_deterministic_reproducibility():
-    """Same seed and data should give same best_score_ (with small tolerance for float)."""
-    X, y = load_iris(return_X_y=True)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=99)
-    model1 = DXClassifier(
-        population_size=8,
-        generations=4,
-        cv=2,
-        verbose=0,
-        n_jobs=1,
-        deterministic=True,
-        random_state=123,
-    )
-    model2 = DXClassifier(
-        population_size=8,
-        generations=4,
-        cv=2,
-        verbose=0,
-        n_jobs=1,
-        deterministic=True,
-        random_state=123,
-    )
-    model1.fit(X_train, y_train)
-    model2.fit(X_train, y_train)
-    assert model1.best_score_ == model2.best_score_
-    # Predictions on same pipeline type might differ if different pipeline chosen; at least scores match
-    np.testing.assert_equal(model1.predict(X_test), model1.best_pipeline_.predict(X_test))
-    np.testing.assert_equal(model2.predict(X_test), model2.best_pipeline_.predict(X_test))
+    """Same seed must yield identical GA outcome in fresh processes.
+
+    Back-to-back ``fit()`` calls in one process can diverge after BLAS-heavy
+    final ``pipeline.fit``; subprocess isolation matches production fresh runs.
+    """
+    root = Path(__file__).resolve().parent.parent
+    worker = Path(__file__).resolve().parent / "reproducibility_worker.py"
+    env = {**os.environ, "PYTHONPATH": str(root)}
+    cmd = [sys.executable, str(worker)]
+
+    def _run() -> str:
+        r = subprocess.run(
+            cmd,
+            cwd=str(root),
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if r.returncode != 0:
+            raise AssertionError(
+                f"reproducibility_worker failed: {r.stderr or r.stdout}"
+            )
+        return (r.stdout or "").strip()
+
+    a = _run()
+    b = _run()
+    assert a == b, f"subprocess outputs differ:\n{a!r}\n{b!r}"
 
 
 def test_binary_classification():

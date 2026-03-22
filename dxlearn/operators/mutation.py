@@ -1,13 +1,13 @@
 """
 Typed mutation operators: categorical replacement, int/float/log-scale mutation.
 
-Applied to pipeline tree nodes with depth control.
+Guided mutation: mostly hyperparameter tweaks; occasional structural change.
 """
 
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from dxlearn.encoding.node import PipelineNode, PreprocessorNode, ScalerNode, ClassifierNode
 from dxlearn.encoding.grammar import PIPELINE_GRAMMAR
@@ -18,32 +18,79 @@ def mutate_pipeline_node(
     node: PipelineNode,
     mutation_rate: float,
     rng: Any,
+    structural_mutation_prob: float = 0.3,
 ) -> PipelineNode:
     """
-    Mutate a pipeline node in-place or return a new node.
+    Mutate a pipeline node (returns a new copy).
 
-    Applies with probability mutation_rate:
-    - Categorical: replace preprocessor/scaler/classifier key with another valid choice.
-    - Integer/float/log: mutate one hyperparameter within bounds.
+    With probability ``1 - structural_mutation_prob`` (~70% default), only
+    hyperparameters are perturbed (structure preserved). Otherwise a full
+    structural mutation may change component keys.
 
     Args:
         node: Pipeline tree to mutate.
-        mutation_rate: Probability of mutating each mutable part.
+        mutation_rate: Probability of mutating each mutable part (within mode).
         rng: Random number generator.
+        structural_mutation_prob: Probability of allowing structural (key) changes.
 
     Returns:
         Mutated pipeline node (new copy).
     """
+    if rng.random() >= structural_mutation_prob:
+        return _mutate_hyperparameters_only(node, mutation_rate, rng)
+    return _mutate_structure_and_params(node, mutation_rate, rng)
+
+
+def _mutate_hyperparameters_only(
+    node: PipelineNode,
+    mutation_rate: float,
+    rng: Any,
+) -> PipelineNode:
+    """Tweak hyperparameters only; keep preprocessor/scaler/classifier keys."""
     registry = get_registry()
     out = node.copy()
 
-    # Mutate preprocessor key
+    if out.preprocessor.key and rng.random() < mutation_rate:
+        out.preprocessor.params = _mutate_params(
+            out.preprocessor.params,
+            out.preprocessor.key,
+            registry._preprocessor_param_specs,
+            rng,
+        )
+
+    if rng.random() < mutation_rate:
+        out.scaler.params = _mutate_params(
+            out.scaler.params,
+            out.scaler.key,
+            registry._scaler_param_specs,
+            rng,
+        )
+
+    if rng.random() < mutation_rate:
+        out.classifier.params = _mutate_params(
+            out.classifier.params,
+            out.classifier.key,
+            registry._classifier_param_specs,
+            rng,
+        )
+
+    return out
+
+
+def _mutate_structure_and_params(
+    node: PipelineNode,
+    mutation_rate: float,
+    rng: Any,
+) -> PipelineNode:
+    """Original-style mutation: may replace component keys and params."""
+    registry = get_registry()
+    out = node.copy()
+
     if rng.random() < mutation_rate:
         choices = PIPELINE_GRAMMAR.get_preprocessor_choices()
         new_key = choices[int(rng.integers(0, len(choices)))]
         new_params = registry.sample_preprocessor_params(new_key, rng) if new_key else {}
         out.preprocessor = PreprocessorNode(key=new_key, params=new_params)
-    # Mutate preprocessor params
     elif out.preprocessor.key and rng.random() < mutation_rate:
         out.preprocessor.params = _mutate_params(
             out.preprocessor.params,
@@ -52,7 +99,6 @@ def mutate_pipeline_node(
             rng,
         )
 
-    # Mutate scaler key
     if rng.random() < mutation_rate:
         choices = PIPELINE_GRAMMAR.get_scaler_choices()
         new_key = choices[int(rng.integers(0, len(choices)))]
@@ -65,7 +111,6 @@ def mutate_pipeline_node(
             rng,
         )
 
-    # Mutate classifier key
     if rng.random() < mutation_rate:
         choices = PIPELINE_GRAMMAR.get_classifier_choices()
         new_key = choices[int(rng.integers(0, len(choices)))]

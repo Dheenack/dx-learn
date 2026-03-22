@@ -95,7 +95,8 @@ class ComponentRegistry:
             "LogisticRegression": {
                 "C": ("log", 0.01, 100.0),
                 "max_iter": ("int", 100, 2000),
-                "solver": ("categorical", ["lbfgs", "saga"], None),
+                # lbfgs only: saga touches global RNG and is sensitive to max_iter / thread order.
+                "solver": ("categorical", ["lbfgs"], None),
             },
             "RandomForestClassifier": {
                 "n_estimators": ("int", 10, 200),
@@ -128,6 +129,7 @@ class ComponentRegistry:
         key: str,
         params: Optional[Dict[str, Any]] = None,
         n_features: Optional[int] = None,
+        random_state: Optional[int] = None,
     ) -> BaseEstimator:
         """Build a preprocessor instance by key with given params.
 
@@ -150,6 +152,8 @@ class ComponentRegistry:
                     params["k"] = min(int(k_raw), int(n_features))
         import inspect
         sig = inspect.signature(cls.__init__)
+        if random_state is not None and "random_state" in sig.parameters:
+            params.setdefault("random_state", random_state)
         valid = {k: v for k, v in params.items() if k in sig.parameters}
         return cls(**valid)
 
@@ -161,7 +165,12 @@ class ComponentRegistry:
             raise ValueError(f"Unknown scaler: {key}")
         return cls(**params)
 
-    def build_classifier(self, key: str, params: Optional[Dict[str, Any]] = None) -> BaseEstimator:
+    def build_classifier(
+        self,
+        key: str,
+        params: Optional[Dict[str, Any]] = None,
+        random_state: Optional[int] = None,
+    ) -> BaseEstimator:
         """Build a classifier instance by key."""
         params = dict(params or {})
         cls = self._classifiers.get(key)
@@ -171,6 +180,8 @@ class ComponentRegistry:
             params.setdefault("probability", True)
         import inspect
         sig = inspect.signature(cls.__init__)
+        if random_state is not None and "random_state" in sig.parameters:
+            params.setdefault("random_state", random_state)
         valid = {k: v for k, v in params.items() if k in sig.parameters}
         return cls(**valid)
 

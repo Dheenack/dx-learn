@@ -17,7 +17,15 @@ def test_dashboard_import_error_without_extra():
 
     from dxlearn import DXClassifier
 
-    model = DXClassifier(population_size=2, generations=1, cv=2, verbose=0, n_jobs=1, random_state=42)
+    model = DXClassifier(
+        population_size=2,
+        generations=1,
+        elitism_count=1,
+        cv=2,
+        verbose=0,
+        n_jobs=1,
+        random_state=42,
+    )
     with pytest.raises(ImportError) as exc_info:
         model.dashboard()
     assert "dashboard" in str(exc_info.value).lower() or "pip install" in str(exc_info.value)
@@ -45,6 +53,14 @@ def test_dashboard_before_fit_raises():
     """Calling dashboard() before fit() raises RuntimeError."""
     from dxlearn import DXClassifier
 
-    model = DXClassifier(population_size=2, generations=1, cv=2, verbose=0, n_jobs=1, random_state=42)
+    model = DXClassifier(
+        population_size=2,
+        generations=1,
+        elitism_count=1,
+        cv=2,
+        verbose=0,
+        n_jobs=1,
+        random_state=42,
+    )
     with pytest.raises(RuntimeError, match="fit.*before dashboard"):
         model.dashboard()

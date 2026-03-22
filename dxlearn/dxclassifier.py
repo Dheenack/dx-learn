@@ -6,6 +6,7 @@ Public API: fit, predict, predict_proba, score, get_params, set_params, dashboar
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any, Optional
 
@@ -13,7 +14,7 @@ import numpy as np
 from sklearn.utils.validation import check_X_y
 
 from dxlearn.base.estimator import BaseDXEstimator
-from dxlearn.engine.genetic_search import GeneticSearch
+from dxlearn.engine.genetic_search import GeneticSearch, _blas_single_thread
 from dxlearn.evaluation.evaluator import mean_cross_val_score
 
 logger = logging.getLogger(__name__)
@@ -137,35 +138,42 @@ class DXClassifier:
 
     def fit(self, X: Any, y: Any, **fit_params: Any) -> DXClassifier:
         """Run genetic search and fit the best pipeline on full data."""
-        self._search.fit(X, y)
-        pipeline = self._search.get_best_pipeline()
-        self.best_pipeline_ = pipeline
-        if pipeline is None:
-            raise RuntimeError("GeneticSearch failed to produce a valid pipeline.")
-        # Recompute CV score on the chosen pipeline (GA objectives can be 0.0 when
-        # many candidates fail; this matches sklearn-style best_score_ semantics).
-        try:
-            self.best_score_ = mean_cross_val_score(
-                pipeline,
-                X,
-                y,
-                cv=self.cv,
-                random_state=self.random_state,
-                scoring="accuracy",
-            )
-        except Exception as exc:
-            logger.warning(
-                "Could not compute cross_val score for best pipeline: %s; "
-                "falling back to search objectives.",
-                exc,
-            )
-            objs = self._search.get_best_objectives()
-            if objs is not None and objs.accuracy >= 0.0:
-                self.best_score_ = objs.accuracy
-            else:
-                self.best_score_ = None
-        self._estimator = BaseDXEstimator(pipeline, best_score=self.best_score_)
-        self._estimator.fit(X, y, **fit_params)
+        # copy=True: avoid mutating caller arrays in-place (would break reproducibility
+        # when the same X, y is passed to a second estimator.fit).
+        X, y = check_X_y(X, y, multi_output=False, copy=True)
+        ctx = _blas_single_thread() if self.deterministic else contextlib.nullcontext()
+        with ctx:
+            if self.deterministic and self.random_state is not None:
+                np.random.seed(int(self.random_state))
+            self._search.fit(X, y)
+            pipeline = self._search.get_best_pipeline()
+            self.best_pipeline_ = pipeline
+            if pipeline is None:
+                raise RuntimeError("GeneticSearch failed to produce a valid pipeline.")
+            # Recompute CV score on the chosen pipeline (GA objectives can be 0.0 when
+            # many candidates fail; this matches sklearn-style best_score_ semantics).
+            try:
+                self.best_score_ = mean_cross_val_score(
+                    pipeline,
+                    X,
+                    y,
+                    cv=self.cv,
+                    random_state=self.random_state,
+                    scoring="accuracy",
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Could not compute cross_val score for best pipeline: %s; "
+                    "falling back to search objectives.",
+                    exc,
+                )
+                objs = self._search.get_best_objectives()
+                if objs is not None and objs.accuracy >= 0.0:
+                    self.best_score_ = objs.accuracy
+                else:
+                    self.best_score_ = None
+            self._estimator = BaseDXEstimator(pipeline, best_score=self.best_score_)
+            self._estimator.fit(X, y, **fit_params)
         return self
 
     def predict(self, X: Any) -> np.ndarray:

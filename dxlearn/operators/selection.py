@@ -35,15 +35,21 @@ def tournament_selection(
     n = len(population)
     if n == 0 or k == 0:
         return []
+    tsize = min(tournament_size, n)
     selected = []
     for _ in range(k):
-        indices = rng.integers(0, n, size=min(tournament_size, n))
-        best_idx = indices[0]
+        # Unique contestants when possible → better diversity than sampling with replacement.
+        if tsize <= n:
+            indices = rng.choice(n, size=tsize, replace=False)
+        else:
+            indices = rng.integers(0, n, size=tsize)
+        best_idx = int(indices[0])
         best_f = fitnesses[best_idx]
         for i in indices[1:]:
-            if fitnesses[i] > best_f:
-                best_f = fitnesses[i]
-                best_idx = i
+            ii = int(i)
+            if fitnesses[ii] > best_f:
+                best_f = fitnesses[ii]
+                best_idx = ii
         selected.append(population[best_idx])
     return selected
 
