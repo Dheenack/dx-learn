@@ -214,6 +214,7 @@ class GeneticSearch(EvolutionarySearch):
         rng = self._get_rng()
         start_time = time.perf_counter()
         self._cache.clear()
+        self._evaluator.clear_result_cache()
         self._history = []
         self._n_features = int(np.asarray(X).shape[1])
 

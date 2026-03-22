@@ -129,9 +129,9 @@ def test_evaluator_handles_invalid_pipeline_gracefully():
     )
     ev = Evaluator(cv=2, random_state=42)
     fitness, objs = ev.evaluate(tree, X, y)
-    # Should not raise; if pipeline fails we get penalized objectives
+    # Should not raise; failures use accuracy=-1.0; valid CV in [0, 1]
     assert isinstance(fitness, (int, float))
-    assert objs.accuracy >= 0 and objs.accuracy <= 1
+    assert objs.accuracy == -1.0 or (0 <= objs.accuracy <= 1)
 
 
 def test_invalid_elitism_raises():

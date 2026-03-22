@@ -10,6 +10,7 @@ import logging
 from typing import Any, Optional
 
 import numpy as np
+from sklearn.utils.validation import check_X_y
 
 from dxlearn.base.estimator import BaseDXEstimator
 from dxlearn.engine.genetic_search import GeneticSearch
@@ -139,7 +140,6 @@ class DXClassifier:
         self._search.fit(X, y)
         pipeline = self._search.get_best_pipeline()
         self.best_pipeline_ = pipeline
-        ## for enhancing the failsafe we add a check here
         if pipeline is None:
             raise RuntimeError("GeneticSearch failed to produce a valid pipeline.")
         # Recompute CV score on the chosen pipeline (GA objectives can be 0.0 when
@@ -160,8 +160,7 @@ class DXClassifier:
                 exc,
             )
             objs = self._search.get_best_objectives()
-            # self.best_score_ = objs.accuracy if objs else None
-            if objs and objs.accuracy > 0:
+            if objs is not None and objs.accuracy >= 0.0:
                 self.best_score_ = objs.accuracy
             else:
                 self.best_score_ = None
@@ -179,6 +178,11 @@ class DXClassifier:
         """Predict class probabilities."""
         if self._estimator is None:
             raise RuntimeError("Call fit() first.")
+        if not hasattr(self._estimator.pipeline, "predict_proba"):
+            raise AttributeError(
+                "Pipeline does not support predict_proba; the final estimator "
+                "has no predict_proba method."
+            )
         return self._estimator.predict_proba(X)
 
     def score(self, X: Any, y: Any) -> float:

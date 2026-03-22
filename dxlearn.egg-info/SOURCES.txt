@@ -28,6 +28,8 @@ pyproject.toml
 ./dxlearn/search_space/preprocessors.py
 ./dxlearn/search_space/registry.py
 ./dxlearn/search_space/scalers.py
+./dxlearn/validation/__init__.py
+./dxlearn/validation/pipeline_validator.py
 dxlearn/__init__.py
 dxlearn/config.py
 dxlearn/dxclassifier.py
