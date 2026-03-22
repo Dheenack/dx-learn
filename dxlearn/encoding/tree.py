@@ -17,6 +17,7 @@ from dxlearn.search_space.registry import ComponentRegistry, get_registry
 def tree_to_pipeline(
     tree: PipelineNode,
     registry: Optional[ComponentRegistry] = None,
+    n_features: Optional[int] = None,
 ) -> Any:
     """
     Build an sklearn Pipeline from a PipelineNode.
@@ -24,6 +25,8 @@ def tree_to_pipeline(
     Args:
         tree: Root pipeline node (preprocessor + scaler + classifier).
         registry: Component registry; uses global if None.
+        n_features: Number of input features (``X.shape[1]``). When set,
+            ``SelectKBest`` uses ``k = min(k, n_features)``.
 
     Returns:
         sklearn Pipeline or a single estimator if no steps.
@@ -37,6 +40,7 @@ def tree_to_pipeline(
         prep = registry.build_preprocessor(
             tree.preprocessor.key,
             tree.preprocessor.params,
+            n_features=n_features,
         )
         steps.append(("preprocessor", prep))
 

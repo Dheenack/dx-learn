@@ -61,5 +61,9 @@ dxlearn/search_space/classifiers.py
 dxlearn/search_space/preprocessors.py
 dxlearn/search_space/registry.py
 dxlearn/search_space/scalers.py
+tests/test_api_contract.py
+tests/test_caching.py
+tests/test_dashboard.py
+tests/test_edge_cases.py
 tests/testv1.py
 tests/testv2.py

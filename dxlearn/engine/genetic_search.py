@@ -123,6 +123,7 @@ class GeneticSearch(EvolutionarySearch):
         self._cache: Dict[str, Tuple[float, Objectives]] = {}
         self._history: List[Dict[str, Any]] = []
         self._best_objectives: Optional[Objectives] = None
+        self._n_features: Optional[int] = None
 
         if population_size < 2:
             raise ValueError("population_size must be >= 2")
@@ -202,7 +203,11 @@ class GeneticSearch(EvolutionarySearch):
         return mutate_pipeline_node(individual, self.mutation_rate, self._get_rng())
 
     def _individual_to_pipeline(self, individual: PipelineNode) -> Any:
-        return tree_to_pipeline(individual, registry=self._registry)
+        return tree_to_pipeline(
+            individual,
+            registry=self._registry,
+            n_features=self._n_features,
+        )
 
     def fit(self, X: Any, y: Any) -> GeneticSearch:
         """Run the genetic search with early stopping and runtime limit."""
@@ -210,6 +215,7 @@ class GeneticSearch(EvolutionarySearch):
         start_time = time.perf_counter()
         self._cache.clear()
         self._history = []
+        self._n_features = int(np.asarray(X).shape[1])
 
         # Initial population (with duplicate elimination)
         population: List[PipelineNode] = []

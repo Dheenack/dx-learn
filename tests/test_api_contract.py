@@ -53,6 +53,27 @@ def test_set_params_returns_self():
     assert model.generations == 3
 
 
+def test_set_params_atomic_when_genetic_search_invalid():
+    """Invalid combo must not mutate attributes or _search (atomic set_params)."""
+    model = DXClassifier(population_size=10, elitism_count=2, random_state=42)
+    search_id = id(model._search)
+    elitism = model.elitism_count
+    pop = model.population_size
+    with pytest.raises(ValueError, match="elitism_count"):
+        model.set_params(elitism_count=10)
+    assert model.elitism_count == elitism
+    assert model.population_size == pop
+    assert id(model._search) == search_id
+
+
+def test_set_params_unknown_key_raises_and_leaves_state():
+    model = DXClassifier(population_size=10, random_state=42)
+    search_id = id(model._search)
+    with pytest.raises(ValueError, match="Invalid parameter"):
+        model.set_params(not_a_valid_dxlearn_param=1)
+    assert id(model._search) == search_id
+
+
 def test_best_pipeline_and_score_after_fit():
     X, y = load_iris(return_X_y=True)
     X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)

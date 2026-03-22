@@ -1,3 +1,4 @@
 *.pyc
 dxlearn.egg-info/SOURCES.txt
 /test-env/
+TEST_REPORT.md

@@ -13,8 +13,32 @@ import numpy as np
 
 from dxlearn.base.estimator import BaseDXEstimator
 from dxlearn.engine.genetic_search import GeneticSearch
+from dxlearn.evaluation.evaluator import mean_cross_val_score
 
 logger = logging.getLogger(__name__)
+
+# Parameters stored as DXClassifier attributes (vs. extra **kwargs for GeneticSearch).
+_DXCLASSIFIER_MAIN_PARAMS: frozenset[str] = frozenset(
+    {
+        "population_size",
+        "generations",
+        "cv",
+        "alpha",
+        "beta",
+        "gamma",
+        "max_runtime",
+        "verbose",
+        "n_jobs",
+        "deterministic",
+        "random_state",
+        "elitism_count",
+        "tournament_size",
+        "mutation_rate",
+        "crossover_rate",
+        "early_stopping_generations",
+        "per_individual_timeout",
+    }
+)
 
 
 class DXClassifier:
@@ -115,8 +139,32 @@ class DXClassifier:
         self._search.fit(X, y)
         pipeline = self._search.get_best_pipeline()
         self.best_pipeline_ = pipeline
-        objs = self._search.get_best_objectives()
-        self.best_score_ = objs.accuracy if objs else None
+        ## for enhancing the failsafe we add a check here
+        if pipeline is None:
+            raise RuntimeError("GeneticSearch failed to produce a valid pipeline.")
+        # Recompute CV score on the chosen pipeline (GA objectives can be 0.0 when
+        # many candidates fail; this matches sklearn-style best_score_ semantics).
+        try:
+            self.best_score_ = mean_cross_val_score(
+                pipeline,
+                X,
+                y,
+                cv=self.cv,
+                random_state=self.random_state,
+                scoring="accuracy",
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not compute cross_val score for best pipeline: %s; "
+                "falling back to search objectives.",
+                exc,
+            )
+            objs = self._search.get_best_objectives()
+            # self.best_score_ = objs.accuracy if objs else None
+            if objs and objs.accuracy > 0:
+                self.best_score_ = objs.accuracy
+            else:
+                self.best_score_ = None
         self._estimator = BaseDXEstimator(pipeline, best_score=self.best_score_)
         self._estimator.fit(X, y, **fit_params)
         return self
@@ -163,30 +211,56 @@ class DXClassifier:
         }
 
     def set_params(self, **params: Any) -> DXClassifier:
-        """Set parameters (sklearn API). Rebuilds internal search and clears fitted state."""
-        for k, v in params.items():
-            if hasattr(self, k):
-                setattr(self, k, v)
-        self._search = GeneticSearch(
-            population_size=self.population_size,
-            generations=self.generations,
-            elitism_count=self.elitism_count,
-            tournament_size=self.tournament_size,
-            mutation_rate=self.mutation_rate,
-            crossover_rate=self.crossover_rate,
-            early_stopping_generations=self.early_stopping_generations,
-            max_runtime=self.max_runtime,
-            per_individual_timeout=self.per_individual_timeout,
-            cv=self.cv,
-            alpha=self.alpha,
-            beta=self.beta,
-            gamma=self.gamma,
-            random_state=self.random_state,
-            verbose=self.verbose,
-            n_jobs=self.n_jobs,
-            deterministic=self.deterministic,
-            **self._kwargs,
+        """Set parameters (sklearn API).
+
+        Rebuilds internal ``GeneticSearch`` and clears fitted state. Updates are
+        **atomic**: if ``GeneticSearch`` validation fails (e.g. invalid
+        ``elitism_count`` / ``population_size``), no attributes or ``_search``
+        are modified.
+        """
+        if not params:
+            return self
+
+        valid = set(self.get_params(deep=False).keys())
+        unknown = set(params) - valid
+        if unknown:
+            raise ValueError(
+                "Invalid parameter(s) for estimator DXClassifier: "
+                f"{sorted(unknown)!r}. Valid parameters are {sorted(valid)!r}."
+            )
+
+        merged = dict(self.get_params(deep=False))
+        merged.update(params)
+
+        main_vals = {k: merged[k] for k in _DXCLASSIFIER_MAIN_PARAMS}
+        extra_kwargs = {k: v for k, v in merged.items() if k not in _DXCLASSIFIER_MAIN_PARAMS}
+
+        # Validate by constructing search first; only then mutate self.
+        new_search = GeneticSearch(
+            population_size=main_vals["population_size"],
+            generations=main_vals["generations"],
+            elitism_count=main_vals["elitism_count"],
+            tournament_size=main_vals["tournament_size"],
+            mutation_rate=main_vals["mutation_rate"],
+            crossover_rate=main_vals["crossover_rate"],
+            early_stopping_generations=main_vals["early_stopping_generations"],
+            max_runtime=main_vals["max_runtime"],
+            per_individual_timeout=main_vals["per_individual_timeout"],
+            cv=main_vals["cv"],
+            alpha=main_vals["alpha"],
+            beta=main_vals["beta"],
+            gamma=main_vals["gamma"],
+            random_state=main_vals["random_state"],
+            verbose=main_vals["verbose"],
+            n_jobs=main_vals["n_jobs"],
+            deterministic=main_vals["deterministic"],
+            **extra_kwargs,
         )
+
+        for k, v in main_vals.items():
+            setattr(self, k, v)
+        self._kwargs = dict(extra_kwargs)
+        self._search = new_search
         self._estimator = None
         self.best_pipeline_ = None
         self.best_score_ = None

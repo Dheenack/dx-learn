@@ -68,7 +68,10 @@ class Evaluator:
         On exception or timeout, returns penalized objectives (low fitness).
         """
         try:
-            pipeline = tree_to_pipeline(individual, registry=registry)
+            n_features = int(np.asarray(X).shape[1])
+            pipeline = tree_to_pipeline(
+                individual, registry=registry, n_features=n_features
+            )
             cv = StratifiedKFold(
                 n_splits=self.cv,
                 shuffle=True,
@@ -129,3 +132,45 @@ class Evaluator:
         fitnesses = [r[0] for r in results]
         objectives_list = [r[1] for r in results]
         return fitnesses, objectives_list
+
+
+def mean_cross_val_score(
+    estimator: Any,
+    X: Any,
+    y: Any,
+    *,
+    cv: int,
+    random_state: Optional[int],
+    scoring: str = "accuracy",
+) -> float:
+    """
+    Mean test score from stratified k-fold CV (same defaults as Evaluator).
+
+    Used to set ``best_score_`` on the final pipeline so it reflects real CV
+    performance rather than GA-internal objectives that may be penalized.
+
+    Folds that error use ``error_score=np.nan`` and are omitted from the mean
+    so brittle pipelines (e.g. aggressive ``VarianceThreshold`` on small folds)
+    still yield a score when any fold succeeds.
+    """
+    from sklearn.model_selection import StratifiedKFold, cross_validate
+
+    skf = StratifiedKFold(
+        n_splits=cv,
+        shuffle=True,
+        random_state=random_state,
+    )
+    result = cross_validate(
+        estimator,
+        X,
+        y,
+        cv=skf,
+        scoring=scoring,
+        n_jobs=1,
+        error_score=np.nan,
+    )
+    scores = np.asarray(result[f"test_{scoring}"], dtype=float)
+    valid = scores[~np.isnan(scores)]
+    if valid.size == 0:
+        raise RuntimeError("All cross-validation folds failed for the best pipeline.")
+    return float(np.mean(valid))

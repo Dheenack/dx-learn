@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 
+import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectKBest, VarianceThreshold, f_classif
@@ -122,14 +123,31 @@ class ComponentRegistry:
             },
         }
 
-    def build_preprocessor(self, key: str, params: Optional[Dict[str, Any]] = None) -> BaseEstimator:
-        """Build a preprocessor instance by key with given params."""
+    def build_preprocessor(
+        self,
+        key: str,
+        params: Optional[Dict[str, Any]] = None,
+        n_features: Optional[int] = None,
+    ) -> BaseEstimator:
+        """Build a preprocessor instance by key with given params.
+
+        Args:
+            key: Preprocessor registry key.
+            params: Constructor keyword arguments.
+            n_features: If set, ``SelectKBest`` ``k`` is clamped to
+                ``min(k, n_features)`` to avoid sklearn warnings and redundant
+                behavior when ``k`` exceeds the number of input features.
+        """
         params = dict(params or {})
         cls = self._preprocessors.get(key)
         if cls is None:
             raise ValueError(f"Unknown preprocessor: {key}")
         if key == "SelectKBest":
             params.setdefault("score_func", f_classif)
+            if n_features is not None and n_features > 0 and "k" in params:
+                k_raw = params["k"]
+                if isinstance(k_raw, (int, np.integer)):
+                    params["k"] = min(int(k_raw), int(n_features))
         import inspect
         sig = inspect.signature(cls.__init__)
         valid = {k: v for k, v in params.items() if k in sig.parameters}
